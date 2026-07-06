@@ -10,6 +10,8 @@ public abstract class Usuario extends Persona {
     protected Sector sector;
     protected Rol rol;
     protected ArrayList<Inmueble> inmuebles;
+    // Historial de inmuebles eliminados (mantener para reportes)
+    protected ArrayList<Inmueble> historialInmuebles;
     protected boolean activo;
 
     public Usuario(String cedula, String nombre, String contraseña, Sector sector)
@@ -37,6 +39,7 @@ public abstract class Usuario extends Persona {
         this.sector    = sector;
         this.rol       = rol;
         this.inmuebles = new ArrayList<>();
+        this.historialInmuebles = new ArrayList<>();
         this.activo    = true;
     }
 
@@ -85,6 +88,23 @@ public abstract class Usuario extends Persona {
         }
         inmuebles.add(inmueble);
     }
+
+    /**
+     * Elimina un inmueble de la lista activa y lo mueve al historial.
+     * Devuelve true si se eliminó correctamente, false si no se encontró.
+     */
+    public boolean eliminarInmueble(int idInmueble) {
+        for (Inmueble i : new ArrayList<>(inmuebles)) {
+            if (i.getId() == idInmueble) {
+                inmuebles.remove(i);
+                historialInmuebles.add(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public ArrayList<Inmueble> getHistorialInmuebles() { return historialInmuebles; }
 
     // ── Estado del usuario ─────────────────────────────────────────────────
 
