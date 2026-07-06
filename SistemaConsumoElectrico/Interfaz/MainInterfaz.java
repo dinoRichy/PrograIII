@@ -29,7 +29,6 @@ MainInterfaz extends JFrame {
     private DefaultTableModel    modeloDisp;
     private Map<String, Double>  consumoSemanalRetoPorUsuario;
     private Map<String, LinkedHashSet<String>> nivelesRetoPorUsuario;
-    private Map<Integer, Sector> sectorPorInmueble;
 
     private static final Color COLOR_PRIMARIO       = new Color(21, 101, 192);
     private static final Color COLOR_SECUNDARIO     = new Color(56, 142,  60);
@@ -53,7 +52,6 @@ MainInterfaz extends JFrame {
             catalogo = new CatalogoDispositivos();
             consumoSemanalRetoPorUsuario = new HashMap<>();
             nivelesRetoPorUsuario = new HashMap<>();
-            sectorPorInmueble = new HashMap<>();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(
                     null,
@@ -279,7 +277,6 @@ MainInterfaz extends JFrame {
                 }
                 Inmueble inmueble = new Inmueble(generarIdInmueble(), nombreInmueble.getText().trim(),
                         (TipoInmueble) tipoInmueble.getSelectedItem());
-                registrarSectorInmueble(inmueble, (Sector) sector.getSelectedItem());
                 usuario.agregarInmueble(inmueble);
                 sistema.getGestorUsuarios().agregarUsuario(usuario);
                 JOptionPane.showMessageDialog(this, "Usuario registrado correctamente.");
@@ -528,7 +525,6 @@ MainInterfaz extends JFrame {
 
         // NUEVO: seleccionar automáticamente el primer inmueble del usuario
         if (usuarioActual != null && usuarioActual.getRol() != Rol.ADMINISTRADOR) {
-            registrarSectoresInmueblesUsuario(usuarioActual);
 
             if (!usuarioActual.getInmuebles().isEmpty()) {
 
@@ -673,7 +669,13 @@ MainInterfaz extends JFrame {
         panelCabecera.add(lblTitulo);
         panelCabecera.add(Box.createVerticalStrut(4));
         panelCabecera.add(lblSubtitulo);
-        panelCabecera.add(Box.createVerticalStrut(10));
+        panelCabecera.add(Box.createVerticalStrut(8));
+
+        final JLabel lblModoUsuario = new JLabel("");
+        lblModoUsuario.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblModoUsuario.setForeground(new Color(80, 80, 80));
+        panelCabecera.add(lblModoUsuario);
+        panelCabecera.add(Box.createVerticalStrut(6));
 
         JPanel panelFiltros = new JPanel(new GridLayout(4, 4, 10, 8));
         panelFiltros.setBackground(Color.WHITE);
@@ -771,10 +773,25 @@ MainInterfaz extends JFrame {
                     throw new NumberFormatException("El consumo mínimo no puede ser mayor al consumo máximo.");
                 }
 
-                List<Usuario> filtrados = filtrarUsuariosReportes(
-                        sectorFiltro, tipoCuentaFiltro, nivelFiltro,
-                        consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
-                );
+                String cedulaBusqueda = tfCedulaUsuario.getText().trim();
+                List<Usuario> filtrados;
+                if (!cedulaBusqueda.isEmpty()) {
+                    Usuario u = sistema.getGestorUsuarios().buscarUsuario(cedulaBusqueda);
+                    if (u == null || u.getRol() == Rol.ADMINISTRADOR) {
+                        JOptionPane.showMessageDialog(this, "No se encontró un usuario válido con la cédula indicada.");
+                        return;
+                    }
+                    filtrados = new ArrayList<>();
+                    filtrados.add(u);
+                    lblModoUsuario.setText("Modo: Usuario - " + u.getNombre() + " (" + u.getCedula() + ")");
+                } else {
+                    filtrados = filtrarUsuariosReportes(
+                            sectorFiltro, tipoCuentaFiltro, nivelFiltro,
+                            consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
+                    );
+                    lblModoUsuario.setText("");
+                }
+
                 String reporte = generarReporteUsuariosDetalladoFiltrado(
                         filtrados, sectorFiltro, tipoCuentaFiltro, nivelFiltro,
                         consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
@@ -797,10 +814,24 @@ MainInterfaz extends JFrame {
                 Integer minimoInmuebles = leerEnteroOpcional(tfMinInmuebles.getText(), "Mínimo de inmuebles");
                 Integer minimoDispositivos = leerEnteroOpcional(tfMinDispositivos.getText(), "Mínimo de dispositivos");
 
-                List<Usuario> filtrados = filtrarUsuariosReportes(
-                        sectorFiltro, tipoCuentaFiltro, nivelFiltro,
-                        consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
-                );
+                String cedulaBusqueda = tfCedulaUsuario.getText().trim();
+                List<Usuario> filtrados;
+                if (!cedulaBusqueda.isEmpty()) {
+                    Usuario u = sistema.getGestorUsuarios().buscarUsuario(cedulaBusqueda);
+                    if (u == null || u.getRol() == Rol.ADMINISTRADOR) {
+                        JOptionPane.showMessageDialog(this, "No se encontró un usuario válido con la cédula indicada.");
+                        return;
+                    }
+                    filtrados = new ArrayList<>();
+                    filtrados.add(u);
+                    lblModoUsuario.setText("Modo: Usuario - " + u.getNombre() + " (" + u.getCedula() + ")");
+                } else {
+                    filtrados = filtrarUsuariosReportes(
+                            sectorFiltro, tipoCuentaFiltro, nivelFiltro,
+                            consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
+                    );
+                    lblModoUsuario.setText("");
+                }
                 String reporte = generarTopConsumoUsuarios(filtrados, 5);
                 areaReporte.setText(formatearReporteAdministrativoHtml(reporte));
                 areaReporte.setCaretPosition(0);
@@ -821,16 +852,8 @@ MainInterfaz extends JFrame {
                 JOptionPane.showMessageDialog(this, "No se encontró un usuario válido con la cédula indicada.");
                 return;
             }
-            String reporte = generarAnalisisDetalladoUsuario(usuario);
-            areaReporte.setText(formatearReporteAdministrativoHtml(reporte));
-            areaReporte.setCaretPosition(0);
-            List<Usuario> individual = new ArrayList<>();
-            individual.add(usuario);
-            actualizarGraficosReportesAdmin(panelVisualizaciones, individual, "USUARIO");
-        });
-
-        btnAnalisisGlobal.addActionListener(e -> {
             try {
+                // Obtener filtros activos para respetarlos en el análisis individual
                 Sector sectorFiltro = obtenerSectorDesdeTexto((String) cbSectorFiltro.getSelectedItem());
                 String tipoCuentaFiltro = (String) cbTipoCuenta.getSelectedItem();
                 String nivelFiltro = (String) cbNivelConsumo.getSelectedItem();
@@ -843,6 +866,58 @@ MainInterfaz extends JFrame {
                         sectorFiltro, tipoCuentaFiltro, nivelFiltro,
                         consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
                 );
+
+                // Si hay filtros aplicados y el usuario no está en la lista filtrada, notificar y no mostrar el análisis
+                boolean incluido = filtrados.isEmpty() || filtrados.stream().anyMatch(u -> u.getCedula().equals(usuario.getCedula()));
+                if (!incluido) {
+                    JOptionPane.showMessageDialog(this, "El usuario no cumple los filtros aplicados. Ajuste los filtros o limpie para ver su análisis.");
+                    return;
+                }
+
+                List<Usuario> individual = new ArrayList<>();
+                individual.add(usuario);
+                lblModoUsuario.setText("Modo: Usuario - " + usuario.getNombre() + " (" + usuario.getCedula() + ")");
+
+                String reporte = generarReporteUsuariosDetalladoFiltrado(
+                        individual, sectorFiltro, tipoCuentaFiltro, nivelFiltro,
+                        consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
+                );
+                areaReporte.setText(formatearReporteAdministrativoHtml(reporte));
+                areaReporte.setCaretPosition(0);
+                actualizarGraficosReportesAdmin(panelVisualizaciones, individual, "USUARIO");
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, construirMensajeError(ex), "Filtro inválido", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+
+        btnAnalisisGlobal.addActionListener(e -> {
+            try {
+                Sector sectorFiltro = obtenerSectorDesdeTexto((String) cbSectorFiltro.getSelectedItem());
+                String tipoCuentaFiltro = (String) cbTipoCuenta.getSelectedItem();
+                String nivelFiltro = (String) cbNivelConsumo.getSelectedItem();
+                Double consumoMinimo = leerDoubleOpcional(tfKwhMin.getText(), "Consumo mínimo");
+                Double consumoMaximo = leerDoubleOpcional(tfKwhMax.getText(), "Consumo máximo");
+                Integer minimoInmuebles = leerEnteroOpcional(tfMinInmuebles.getText(), "Mínimo de inmuebles");
+                Integer minimoDispositivos = leerEnteroOpcional(tfMinDispositivos.getText(), "Mínimo de dispositivos");
+
+                String cedulaBusqueda = tfCedulaUsuario.getText().trim();
+                List<Usuario> filtrados;
+                if (!cedulaBusqueda.isEmpty()) {
+                    Usuario u = sistema.getGestorUsuarios().buscarUsuario(cedulaBusqueda);
+                    if (u == null || u.getRol() == Rol.ADMINISTRADOR) {
+                        JOptionPane.showMessageDialog(this, "No se encontró un usuario válido con la cédula indicada.");
+                        return;
+                    }
+                    filtrados = new ArrayList<>();
+                    filtrados.add(u);
+                    lblModoUsuario.setText("Modo: Usuario - " + u.getNombre() + " (" + u.getCedula() + ")");
+                } else {
+                    filtrados = filtrarUsuariosReportes(
+                            sectorFiltro, tipoCuentaFiltro, nivelFiltro,
+                            consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
+                    );
+                    lblModoUsuario.setText("");
+                }
                 String reporte = generarAnalisisGlobalUsuarios(filtrados);
                 areaReporte.setText(formatearReporteAdministrativoHtml(reporte));
                 areaReporte.setCaretPosition(0);
@@ -862,10 +937,24 @@ MainInterfaz extends JFrame {
                 Integer minimoInmuebles = leerEnteroOpcional(tfMinInmuebles.getText(), "Mínimo de inmuebles");
                 Integer minimoDispositivos = leerEnteroOpcional(tfMinDispositivos.getText(), "Mínimo de dispositivos");
 
-                List<Usuario> filtrados = filtrarUsuariosReportes(
-                        sectorFiltro, tipoCuentaFiltro, nivelFiltro,
-                        consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
-                );
+                String cedulaBusqueda = tfCedulaUsuario.getText().trim();
+                List<Usuario> filtrados;
+                if (!cedulaBusqueda.isEmpty()) {
+                    Usuario u = sistema.getGestorUsuarios().buscarUsuario(cedulaBusqueda);
+                    if (u == null || u.getRol() == Rol.ADMINISTRADOR) {
+                        JOptionPane.showMessageDialog(this, "No se encontró un usuario válido con la cédula indicada.");
+                        return;
+                    }
+                    filtrados = new ArrayList<>();
+                    filtrados.add(u);
+                    lblModoUsuario.setText("Modo: Usuario - " + u.getNombre() + " (" + u.getCedula() + ")");
+                } else {
+                    filtrados = filtrarUsuariosReportes(
+                            sectorFiltro, tipoCuentaFiltro, nivelFiltro,
+                            consumoMinimo, consumoMaximo, minimoInmuebles, minimoDispositivos
+                    );
+                    lblModoUsuario.setText("");
+                }
                 String reporte = generarAnalisisDispositivosGlobal(filtrados);
                 areaReporte.setText(formatearReporteAdministrativoHtml(reporte));
                 areaReporte.setCaretPosition(0);
@@ -884,6 +973,7 @@ MainInterfaz extends JFrame {
             tfMinInmuebles.setText("");
             tfMinDispositivos.setText("");
             tfCedulaUsuario.setText("");
+            lblModoUsuario.setText("");
             areaReporte.setText(formatearReporteAdministrativoHtml(
                     "Filtros restablecidos.\nSeleccione una acción para generar un nuevo reporte."
             ));
@@ -930,17 +1020,6 @@ MainInterfaz extends JFrame {
 
         }
 
-        cbInmuebles.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof Inmueble) {
-                    setText(formatearEtiquetaInmueble((Inmueble) value));
-                }
-                return c;
-            }
-        });
-
         if (inmuebleActual != null && usuarioActual.getInmuebles().contains(inmuebleActual)) {
             cbInmuebles.setSelectedItem(inmuebleActual);
         } else if (!usuarioActual.getInmuebles().isEmpty()) {
@@ -949,6 +1028,7 @@ MainInterfaz extends JFrame {
         }
 
         JButton btnNuevoInmueble = crearBotonExito("＋ Nueva vivienda", -1, 36);
+        JButton btnEliminarInmueble = crearBotonAdvertencia("－ Eliminar vivienda", -1, 36);
 
         cbInmuebles.addActionListener(e -> {
 
@@ -967,19 +1047,14 @@ MainInterfaz extends JFrame {
                 JTextField txtNombre = new JTextField();
 
                 JComboBox<TipoInmueble> cbTipo = new JComboBox<>(TipoInmueble.values());
-                JComboBox<Sector> cbSector = new JComboBox<>(Sector.values());
-                cbSector.setSelectedItem(usuarioActual.getSector());
 
-                JPanel formulario = new JPanel(new GridLayout(3, 2, 8, 8));
+                JPanel formulario = new JPanel(new GridLayout(2, 2, 8, 8));
 
                 formulario.add(new JLabel("Nombre"));
                 formulario.add(txtNombre);
 
                 formulario.add(new JLabel("Tipo"));
                 formulario.add(cbTipo);
-
-                formulario.add(new JLabel("Sector"));
-                formulario.add(cbSector);
 
                 int opcion = JOptionPane.showConfirmDialog(this, formulario, "Nueva vivienda", JOptionPane.OK_CANCEL_OPTION);
 
@@ -998,7 +1073,6 @@ MainInterfaz extends JFrame {
                 }
 
                 Inmueble nuevo = new Inmueble(generarIdInmueble(), txtNombre.getText().trim(), (TipoInmueble) cbTipo.getSelectedItem());
-                registrarSectorInmueble(nuevo, (Sector) cbSector.getSelectedItem());
 
                 usuarioActual.agregarInmueble(nuevo);
 
@@ -1281,9 +1355,34 @@ MainInterfaz extends JFrame {
 
         panelInmueble.add(cbInmuebles, BorderLayout.CENTER);
 
-        panelInmueble.add(btnNuevoInmueble, BorderLayout.EAST);
+        JPanel panelBtns = new JPanel(new GridLayout(1,2,8,0));
+        panelBtns.setBackground(Color.WHITE);
+        panelBtns.add(btnNuevoInmueble);
+        panelBtns.add(btnEliminarInmueble);
+        panelInmueble.add(panelBtns, BorderLayout.EAST);
 
         panelEntrada.add(panelInmueble);
+
+        // Listener para eliminar vivienda (se mueve al historial)
+        btnEliminarInmueble.addActionListener(ev -> {
+            if (inmuebleActual == null) {
+                JOptionPane.showMessageDialog(this, "No hay una vivienda seleccionada para eliminar.");
+                return;
+            }
+            int confirm = JOptionPane.showConfirmDialog(this, "¿Confirma eliminar la vivienda seleccionada? Esto la moverá al historial.", "Confirmar eliminación", JOptionPane.YES_NO_OPTION);
+            if (confirm != JOptionPane.YES_OPTION) return;
+            boolean ok = usuarioActual.eliminarInmueble(inmuebleActual.getId());
+            if (ok) {
+                cbInmuebles.removeItem(inmuebleActual);
+                inmuebleActual = usuarioActual.getInmuebles().isEmpty() ? null : usuarioActual.getInmuebles().get(0);
+                if (inmuebleActual != null) cbInmuebles.setSelectedItem(inmuebleActual);
+                cargarTablaDispositivos(modeloDisp);
+                actualizarInicio();
+                JOptionPane.showMessageDialog(this, "Vivienda eliminada y registrada en historial.");
+            } else {
+                JOptionPane.showMessageDialog(this, "No se pudo eliminar la vivienda.");
+            }
+        });
 
         panelEntrada.add(Box.createVerticalStrut(15));
 
@@ -1727,7 +1826,6 @@ MainInterfaz extends JFrame {
 
     private String generarResumenVivienda(Inmueble inmueble) {
         StringBuilder texto = new StringBuilder();
-        Sector sectorInmueble = obtenerSectorInmueble(inmueble);
         double consumoDiario = calcularConsumoInmuebleDiario(inmueble);
         double consumoMensual = calcularConsumoInmuebleMensual(inmueble);
         double consumoAnual = consumoMensual * 12.0;
@@ -1741,7 +1839,6 @@ MainInterfaz extends JFrame {
         texto.append("\n===== RESUMEN DE VIVIENDA =====\n");
         texto.append("Vivienda: ").append(inmueble.getNombre()).append("\n");
         texto.append("Tipo: ").append(inmueble.getTipo()).append("\n");
-        texto.append("Sector: ").append(sectorInmueble).append("\n");
         texto.append("Dispositivos registrados: ").append(dispositivos).append("\n");
         texto.append("Potencia total instalada: ").append(String.format(Locale.US, "%.2f", potenciaTotal)).append(" W\n");
         texto.append(String.format(Locale.US, "Consumo diario: %.2f kWh%n", consumoDiario));
@@ -1753,14 +1850,13 @@ MainInterfaz extends JFrame {
 
     private String generarAnalisisVivienda(Inmueble inmueble) {
         StringBuilder texto = new StringBuilder();
-        Sector sectorInmueble = obtenerSectorInmueble(inmueble);
         double consumoMensual = calcularConsumoInmuebleMensual(inmueble);
-        double limite = sectorInmueble.getLimiteConsumo();
+        double limite = usuarioActual.getSector().getLimiteConsumo();
         Dispositivo mayor = obtenerMayorConsumidorInmueble(inmueble);
 
         texto.append("\n===== ANÁLISIS DE VIVIENDA =====\n");
         texto.append("Vivienda: ").append(inmueble.getNombre()).append("\n");
-        texto.append("Sector de la vivienda: ").append(sectorInmueble).append("\n");
+        texto.append("Sector del usuario: ").append(usuarioActual.getSector()).append("\n");
         texto.append(String.format(Locale.US, "Consumo mensual de la vivienda: %.2f kWh%n", consumoMensual));
         texto.append(String.format(Locale.US, "Límite recomendado del sector: %.2f kWh%n", limite));
         texto.append(String.format(Locale.US, "Diferencia frente al límite: %.2f kWh%n", consumoMensual - limite));
@@ -1812,17 +1908,15 @@ MainInterfaz extends JFrame {
 
     private String generarRecomendacionesVivienda(Inmueble inmueble) {
         StringBuilder texto = new StringBuilder();
-        Sector sectorInmueble = obtenerSectorInmueble(inmueble);
         double consumoMensual = calcularConsumoInmuebleMensual(inmueble);
         Dispositivo mayor = obtenerMayorConsumidorInmueble(inmueble);
         texto.append("\n===== RECOMENDACIONES DE VIVIENDA =====\n");
         texto.append("Vivienda: ").append(inmueble.getNombre()).append("\n");
-        texto.append("Sector: ").append(sectorInmueble).append("\n");
         if (inmueble.getDispositivos().isEmpty()) {
             texto.append("Agregue dispositivos para obtener recomendaciones más precisas.\n");
             return texto.toString();
         }
-        if (consumoMensual > sectorInmueble.getLimiteConsumo()) {
+        if (consumoMensual > usuarioActual.getSector().getLimiteConsumo()) {
             texto.append("El consumo mensual de esta vivienda supera el límite recomendado del sector.\n");
         } else {
             texto.append("El consumo mensual de esta vivienda está dentro de parámetros aceptables.\n");
@@ -1868,7 +1962,7 @@ MainInterfaz extends JFrame {
 
     private String calcularNivelVivienda(Inmueble inmueble) {
         double consumoMensual = calcularConsumoInmuebleMensual(inmueble);
-        double limite = obtenerSectorInmueble(inmueble).getLimiteConsumo();
+        double limite = usuarioActual.getSector().getLimiteConsumo();
         if (consumoMensual < limite * 0.50) return "BAJO";
         if (consumoMensual < limite) return "NORMAL";
         if (consumoMensual < limite * 1.30) return "ALTO";
@@ -1899,9 +1993,7 @@ MainInterfaz extends JFrame {
 
         if (inmuebleActual != null) {
 
-            datosUsuario += "\nInmueble: " + inmuebleActual.getNombre()
-                    + "\nTipo: " + inmuebleActual.getTipo()
-                    + "\nSector vivienda: " + obtenerSectorInmueble(inmuebleActual);
+            datosUsuario += "\nInmueble: " + inmuebleActual.getNombre() + "\nTipo: " + inmuebleActual.getTipo();
 
         }
 
@@ -2187,46 +2279,6 @@ MainInterfaz extends JFrame {
 
         return mayor + 1;
 
-    }
-
-    private void registrarSectoresInmueblesUsuario(Usuario usuario) {
-        if (usuario == null) {
-            return;
-        }
-        for (Inmueble inmueble : usuario.getInmuebles()) {
-            registrarSectorInmueble(inmueble, usuario.getSector());
-        }
-    }
-
-    private void registrarSectorInmueble(Inmueble inmueble, Sector sector) {
-        if (inmueble == null) {
-            return;
-        }
-        Sector sectorFinal = sector;
-        if (sectorFinal == null) {
-            sectorFinal = usuarioActual != null ? usuarioActual.getSector() : Sector.values()[0];
-        }
-        sectorPorInmueble.put(inmueble.getId(), sectorFinal);
-    }
-
-    private Sector obtenerSectorInmueble(Inmueble inmueble) {
-        if (inmueble == null) {
-            return usuarioActual != null ? usuarioActual.getSector() : Sector.values()[0];
-        }
-        Sector sector = sectorPorInmueble.get(inmueble.getId());
-        if (sector != null) {
-            return sector;
-        }
-        Sector sectorUsuario = usuarioActual != null ? usuarioActual.getSector() : Sector.values()[0];
-        registrarSectorInmueble(inmueble, sectorUsuario);
-        return sectorUsuario;
-    }
-
-    private String formatearEtiquetaInmueble(Inmueble inmueble) {
-        if (inmueble == null) {
-            return "";
-        }
-        return inmueble.getNombre() + " (" + inmueble.getTipo() + ") - Sector: " + obtenerSectorInmueble(inmueble);
     }
 
     private void estilizarTextField(JTextField tf) {
@@ -2594,6 +2646,30 @@ MainInterfaz extends JFrame {
                             .append(" | Consumo mensual: ").append(String.format("%.2f", dispositivo.calcularConsumoMensual())).append(" kWh\n");
                 }
             }
+
+            // Incluir historial de inmuebles eliminados en el reporte (si existe)
+            if (usuario.getHistorialInmuebles() != null && !usuario.getHistorialInmuebles().isEmpty()) {
+                reporte.append("\nHistorial de inmuebles (eliminados):\n");
+                for (Inmueble inmueble : usuario.getHistorialInmuebles()) {
+                    double consumoInmueble = calcularConsumoMensualInmueble(inmueble);
+                    reporte.append("- Inmueble: ").append(inmueble.getNombre()).append(" (Histórico)")
+                            .append(" | Tipo: ").append(inmueble.getTipo())
+                            .append(" | Consumo mensual: ").append(String.format("%.2f", consumoInmueble)).append(" kWh\n");
+                    if (inmueble.getDispositivos().isEmpty()) {
+                        reporte.append("  - Sin dispositivos registrados.\n");
+                        continue;
+                    }
+                    for (Dispositivo dispositivo : inmueble.getDispositivos()) {
+                        reporte.append("  - Dispositivo: ").append(dispositivo.getNombre())
+                                .append(" | Potencia: ").append(String.format("%.0f", dispositivo.getPotencia())).append(" W")
+                                .append(" | Cantidad: ").append(dispositivo.getCantidad())
+                                .append(" | Horas/día: ").append(String.format("%.2f", dispositivo.getHorasUsoDiarias()))
+                                .append(" | Consumo diario: ").append(String.format("%.2f", dispositivo.calcularConsumoDiario())).append(" kWh")
+                                .append(" | Consumo mensual: ").append(String.format("%.2f", dispositivo.calcularConsumoMensual())).append(" kWh\n");
+                    }
+                }
+            }
+
             reporte.append("------------------------------------------------------------\n");
         }
         return reporte.toString();
