@@ -1516,10 +1516,11 @@ MainInterfaz extends JFrame {
         JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         panelBotones.setBackground(Color.WHITE);
         panelBotones.setBorder(BorderFactory.createTitledBorder(
-                inmuebleActual != null ? "Análisis de la vivienda seleccionada" : "Análisis global del usuario"));
+                "Resumen, análisis e historial de viviendas"));
 
         JButton btnResumen  = crearBotonPrimario("📋 Ver Resumen",  160, 40);
         JButton btnAnalisis = crearBotonPrimario("📊 Ver Análisis", 160, 40);
+        JButton btnHistorial = crearBotonSecundario("📁 Ver Historial", 160, 40);
 
         JTextPane taResultados = crearAreaInforme();
         JScrollPane scroll = new JScrollPane(taResultados);
@@ -1537,10 +1538,18 @@ MainInterfaz extends JFrame {
             taResultados.setCaretPosition(0);
         });
 
+        btnHistorial.addActionListener(e -> {
+            String texto = generarHistorialViviendasContextual();
+            taResultados.setText(formatearInformeHtml(texto, false));
+            taResultados.setCaretPosition(0);
+        });
+
         panelBotones.add(btnResumen);
         panelBotones.add(btnAnalisis);
+        panelBotones.add(btnHistorial);
         panel.add(panelBotones, BorderLayout.NORTH);
         panel.add(scroll, BorderLayout.CENTER);
+        btnResumen.doClick();
         return panel;
     }
 
@@ -1646,9 +1655,13 @@ MainInterfaz extends JFrame {
 
         JLabel lblProgresoTitulo = new JLabel("Progreso");
         lblProgresoTitulo.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        JLabel lblBarra = new JLabel();
-        lblBarra.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        lblBarra.setForeground(COLOR_PRIMARIO);
+        JProgressBar barraProgreso = new JProgressBar(0, 100);
+        barraProgreso.setStringPainted(true);
+        barraProgreso.setForeground(COLOR_PRIMARIO);
+        barraProgreso.setBackground(new Color(232, 238, 249));
+        barraProgreso.setBorder(BorderFactory.createLineBorder(COLOR_BORDE, 1));
+        barraProgreso.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        barraProgreso.setPreferredSize(new Dimension(0, 30));
         JLabel lblNivel = new JLabel();
         lblNivel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblNivel.setForeground(COLOR_TEXTO);
@@ -1684,8 +1697,10 @@ MainInterfaz extends JFrame {
             double reduccion = ((consumoSemanalBase - consumoActual) / consumoSemanalBase) * 100.0;
             if (reduccion < 0) reduccion = 0;
             double progreso = Math.min(100.0, (reduccion / 10.0) * 100.0);
+            int valorProgreso = (int) Math.round(progreso);
 
-            lblBarra.setText(construirBarraProgresoReto(progreso));
+            barraProgreso.setValue(valorProgreso);
+            barraProgreso.setString(valorProgreso + "%");
             String nivel = resolverNivelReto(progreso);
             lblNivel.setText("Nivel actual: " + nivel + " | Reducción lograda: " + String.format("%.2f", reduccion) + "%");
 
@@ -1743,7 +1758,7 @@ MainInterfaz extends JFrame {
         panelSuperior.add(Box.createVerticalStrut(14));
         panelSuperior.add(lblProgresoTitulo);
         panelSuperior.add(Box.createVerticalStrut(6));
-        panelSuperior.add(lblBarra);
+        panelSuperior.add(barraProgreso);
         panelSuperior.add(Box.createVerticalStrut(8));
         panelSuperior.add(lblNivel);
         panelSuperior.add(Box.createVerticalStrut(8));
@@ -1810,6 +1825,10 @@ MainInterfaz extends JFrame {
         return generarAnalisisVivienda(inmuebleActual);
     }
 
+    private String generarHistorialViviendasContextual() {
+        return generarHistorialViviendas(usuarioActual);
+    }
+
     private String generarFacturaContextual() {
         if (inmuebleActual == null) {
             return sistema.generarFactura(usuarioActual);
@@ -1822,6 +1841,49 @@ MainInterfaz extends JFrame {
             return sistema.obtenerRecomendaciones(usuarioActual);
         }
         return generarRecomendacionesVivienda(inmuebleActual);
+    }
+
+    private String generarHistorialViviendas(Usuario usuario) {
+        StringBuilder texto = new StringBuilder();
+        texto.append("\n===== HISTORIAL DE VIVIENDAS =====\n");
+        texto.append("Usuario: ").append(usuario.getNombre()).append("\n");
+        texto.append("Cédula: ").append(usuario.getCedula()).append("\n");
+        texto.append("Viviendas activas: ").append(usuario.getInmuebles().size()).append("\n");
+        texto.append("Viviendas eliminadas: ").append(usuario.getHistorialInmuebles().size()).append("\n\n");
+
+        texto.append("Viviendas activas registradas:\n");
+        if (usuario.getInmuebles().isEmpty()) {
+            texto.append("No hay viviendas activas registradas.\n");
+        } else {
+            for (Inmueble inmueble : usuario.getInmuebles()) {
+                texto.append(formatearEntradaHistorialVivienda(inmueble, "Activa"));
+            }
+        }
+
+        texto.append("\nViviendas eliminadas:\n");
+        if (usuario.getHistorialInmuebles().isEmpty()) {
+            texto.append("No hay viviendas eliminadas registradas.\n");
+        } else {
+            for (Inmueble inmueble : usuario.getHistorialInmuebles()) {
+                texto.append(formatearEntradaHistorialVivienda(inmueble, "Eliminada"));
+            }
+        }
+
+        return texto.toString();
+    }
+
+    private String formatearEntradaHistorialVivienda(Inmueble inmueble, String estado) {
+        double consumoMensual = calcularConsumoInmuebleMensual(inmueble);
+        return String.format(
+                Locale.US,
+                "- ID: %d | Nombre: %s | Tipo: %s | Dispositivos: %d | Consumo mensual: %.2f kWh | Estado: %s%n",
+                inmueble.getId(),
+                inmueble.getNombre(),
+                inmueble.getTipo(),
+                inmueble.getDispositivos().size(),
+                consumoMensual,
+                estado
+        );
     }
 
     private String generarResumenVivienda(Inmueble inmueble) {
@@ -3291,7 +3353,7 @@ MainInterfaz extends JFrame {
             boolean esTitulo  = raw.startsWith("====") || raw.endsWith(":")
                     || x.contains("resumen") || x.contains("analisis")
                     || x.contains("análisis") || x.contains("factura")
-                    || x.contains("recomend");
+                    || x.contains("recomend") || x.contains("historial");
             boolean esCritico = x.contains("critico") || x.contains("crítico");
             boolean esAlto    = x.contains("alto");
             boolean esMedio   = x.contains("medio") || x.contains("normal")
